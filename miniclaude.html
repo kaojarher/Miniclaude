@@ -1,0 +1,503 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>AI Chat · 可切換 LLM</title>
+<script src="https://js.puter.com/v2/"></script>
+<style>
+:root{
+  --bg:#faf9f5; --panel:#f3f1ea; --surface:#ffffff; --text:#2b2a27; --muted:#7a766c;
+  --border:#e4e0d4; --accent:#c96442; --accent-fg:#fff; --user:#ece8dc; --code:#1f1e1b; --code-fg:#eae7dc;
+  --danger:#b3382c; --radius:14px;
+}
+:root[data-theme="dark"]{
+  --bg:#262624; --panel:#1f1e1d; --surface:#30302e; --text:#ecebe5; --muted:#9b978c;
+  --border:#3d3c39; --accent:#d97757; --accent-fg:#1a1918; --user:#393835; --code:#171716; --code-fg:#e8e5da; --danger:#ef7b6d;
+}
+*{box-sizing:border-box}
+html,body{height:100%;margin:0}
+body{font:16px/1.65 system-ui,-apple-system,"Segoe UI","Noto Sans TC",sans-serif;background:var(--bg);color:var(--text);display:flex;overflow:hidden}
+button{font:inherit;color:inherit;cursor:pointer}
+.serif{font-family:Georgia,"Noto Serif TC","Songti TC",serif}
+
+/* sidebar */
+#sidebar{width:272px;flex:none;background:var(--panel);border-right:1px solid var(--border);display:flex;flex-direction:column;transition:margin .2s}
+#sidebar .top{padding:14px;display:flex;flex-direction:column;gap:10px}
+.brand{font-size:20px;display:flex;align-items:center;gap:8px;padding:2px 4px}
+.brand i{color:var(--accent);font-style:normal}
+.btn-new{display:flex;align-items:center;gap:8px;padding:10px 12px;border-radius:10px;background:var(--accent);color:var(--accent-fg);border:0;font-weight:600}
+.btn-new:hover{filter:brightness(1.07)}
+#chatlist{flex:1;overflow:auto;padding:4px 8px}
+.chat-item{display:flex;align-items:center;gap:6px;padding:8px 10px;border-radius:8px;cursor:pointer;font-size:14px}
+.chat-item:hover{background:color-mix(in srgb,var(--text) 7%,transparent)}
+.chat-item.active{background:color-mix(in srgb,var(--text) 11%,transparent)}
+.chat-item span{flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.chat-item button{opacity:0;border:0;background:none;color:var(--muted);padding:2px 6px;border-radius:6px}
+.chat-item:hover button{opacity:1}
+.chat-item button:hover{color:var(--danger)}
+#sidebar .bottom{padding:10px;border-top:1px solid var(--border);display:flex;gap:6px}
+.ghost{background:none;border:1px solid var(--border);border-radius:10px;padding:8px 10px;flex:1;font-size:14px}
+.ghost:hover{background:color-mix(in srgb,var(--text) 7%,transparent)}
+
+/* main */
+main{flex:1;min-width:0;display:flex;flex-direction:column;height:100%}
+header{display:flex;align-items:center;gap:10px;padding:10px 16px}
+#toggleSide{display:none;border:0;background:none;font-size:20px}
+#modelChip{margin-left:auto;display:flex;align-items:center;gap:8px;border:1px solid var(--border);background:var(--surface);border-radius:999px;padding:6px 14px;font-size:14px}
+#modelChip:hover{border-color:var(--accent)}
+#modelChip b{font-weight:600}
+#modelChip small{color:var(--muted)}
+#scroll{flex:1;overflow:auto;padding:8px 16px 24px}
+.col{max-width:760px;margin:0 auto}
+.welcome{text-align:center;padding-top:14vh}
+.welcome h1{font-weight:400;font-size:36px;margin:0 0 8px}
+.welcome h1 i{color:var(--accent);font-style:normal}
+.welcome p{color:var(--muted);margin:0 0 26px}
+.chips{display:flex;flex-wrap:wrap;gap:8px;justify-content:center}
+.chips button{border:1px solid var(--border);background:var(--surface);border-radius:999px;padding:8px 14px;font-size:14px}
+.chips button:hover{border-color:var(--accent)}
+
+.msg{margin:22px 0;display:flex;gap:12px}
+.msg.user{justify-content:flex-end}
+.msg.user .bubble{background:var(--user);padding:10px 16px;border-radius:var(--radius);max-width:85%;white-space:pre-wrap;word-break:break-word}
+.avatar{flex:none;width:28px;height:28px;border-radius:50%;background:var(--accent);color:var(--accent-fg);display:grid;place-items:center;font-size:14px;margin-top:2px}
+.msg.assistant .body{flex:1;min-width:0;overflow-wrap:anywhere}
+.body p{margin:0 0 .85em}
+.body h1,.body h2,.body h3,.body h4{font-family:Georgia,"Noto Serif TC",serif;margin:1.1em 0 .4em;line-height:1.3}
+.body h1{font-size:1.5em}.body h2{font-size:1.3em}.body h3{font-size:1.15em}
+.body ul,.body ol{padding-left:1.4em;margin:0 0 .85em}
+.body blockquote{margin:0 0 .85em;padding-left:14px;border-left:3px solid var(--border);color:var(--muted)}
+.body code{background:color-mix(in srgb,var(--text) 10%,transparent);padding:1px 6px;border-radius:5px;font:.88em ui-monospace,Menlo,Consolas,monospace}
+.body a{color:var(--accent)}
+.body hr{border:0;border-top:1px solid var(--border);margin:1.2em 0}
+.codeblock{background:var(--code);color:var(--code-fg);border-radius:10px;margin:0 0 1em;overflow:hidden}
+.codeblock .bar{display:flex;justify-content:space-between;padding:6px 12px;font-size:12px;color:#a9a597;background:rgba(255,255,255,.05)}
+.codeblock .bar button{background:none;border:0;color:inherit;font-size:12px}
+.codeblock .bar button:hover{color:#fff}
+.codeblock pre{margin:0;padding:12px 14px;overflow:auto;font:13.5px/1.55 ui-monospace,Menlo,Consolas,monospace}
+.actions{display:flex;gap:4px;margin-top:4px}
+.actions button{border:0;background:none;color:var(--muted);font-size:13px;padding:3px 8px;border-radius:6px}
+.actions button:hover{background:color-mix(in srgb,var(--text) 8%,transparent);color:var(--text)}
+.err{color:var(--danger);white-space:pre-wrap}
+.typing::after{content:"●";color:var(--accent);animation:blink 1s infinite;margin-left:3px}
+@keyframes blink{50%{opacity:.2}}
+
+/* composer */
+#composer{padding:0 16px 18px}
+.box{max-width:760px;margin:0 auto;background:var(--surface);border:1px solid var(--border);border-radius:20px;padding:10px 10px 10px 18px;display:flex;align-items:flex-end;gap:8px;box-shadow:0 2px 12px rgba(0,0,0,.05)}
+.box:focus-within{border-color:var(--accent)}
+#input{flex:1;border:0;outline:0;resize:none;background:none;color:var(--text);font:inherit;max-height:220px;padding:6px 0}
+#send{width:38px;height:38px;border-radius:12px;border:0;background:var(--accent);color:var(--accent-fg);font-size:18px;display:grid;place-items:center;flex:none}
+#send:disabled{opacity:.35;cursor:default}
+.hint{max-width:760px;margin:6px auto 0;text-align:center;font-size:12px;color:var(--muted)}
+
+/* modal */
+dialog{border:1px solid var(--border);background:var(--surface);color:var(--text);border-radius:18px;padding:0;width:min(520px,94vw);box-shadow:0 20px 60px rgba(0,0,0,.3)}
+dialog::backdrop{background:rgba(0,0,0,.45)}
+.m-head{padding:18px 22px 6px;font-size:20px}
+.m-body{padding:6px 22px 8px;display:flex;flex-direction:column;gap:14px;max-height:68vh;overflow:auto}
+.m-foot{padding:14px 22px 18px;display:flex;gap:8px;justify-content:flex-end}
+label{display:flex;flex-direction:column;gap:5px;font-size:13px;color:var(--muted)}
+input[type=text],input[type=password],input[type=number],select,textarea{width:100%;font:inherit;font-size:15px;color:var(--text);background:var(--bg);border:1px solid var(--border);border-radius:10px;padding:9px 11px;outline:0}
+input:focus,select:focus,textarea:focus{border-color:var(--accent)}
+.row{display:flex;gap:8px;align-items:flex-end}
+.row label{flex:1}
+.note{font-size:13px;color:var(--muted);background:var(--bg);border:1px dashed var(--border);border-radius:10px;padding:9px 12px;line-height:1.55}
+.note code{background:color-mix(in srgb,var(--text) 10%,transparent);padding:0 5px;border-radius:4px}
+.primary{background:var(--accent);color:var(--accent-fg);border:0;border-radius:10px;padding:9px 18px;font-weight:600}
+.secondary{background:none;border:1px solid var(--border);border-radius:10px;padding:9px 16px}
+#testMsg{font-size:13px}
+.ok{color:#3b8a4f}.bad{color:var(--danger)}
+
+@media (max-width:760px){
+  #sidebar{position:fixed;z-index:20;height:100%;margin-left:-280px}
+  #sidebar.open{margin-left:0;box-shadow:0 0 40px rgba(0,0,0,.35)}
+  #toggleSide{display:block}
+  .welcome h1{font-size:28px}
+}
+</style>
+</head>
+<body>
+
+<aside id="sidebar">
+  <div class="top">
+    <div class="brand serif"><i>✦</i> AI Chat</div>
+    <button class="btn-new" id="newChat">＋ 新對話</button>
+  </div>
+  <div id="chatlist"></div>
+  <div class="bottom">
+    <button class="ghost" id="themeBtn">🌓 主題</button>
+    <button class="ghost" id="openSettings">⚙ 設定</button>
+  </div>
+</aside>
+
+<main>
+  <header>
+    <button id="toggleSide" aria-label="選單">☰</button>
+    <button id="modelChip" title="切換 LLM"><span>🧠</span><b id="chipProvider"></b><small id="chipModel"></small></button>
+  </header>
+  <div id="scroll"><div class="col" id="messages"></div></div>
+  <div id="composer">
+    <div class="box">
+      <textarea id="input" rows="1" placeholder="想聊些什麼?(Enter 送出,Shift+Enter 換行)"></textarea>
+      <button id="send" aria-label="送出">↑</button>
+    </div>
+    <div class="hint">AI 可能出錯,重要資訊請自行查證。</div>
+  </div>
+</main>
+
+<dialog id="settings">
+  <form method="dialog" id="settingsForm">
+    <div class="m-head serif">LLM 設定</div>
+    <div class="m-body">
+      <label>供應商
+        <select id="provider">
+          <option value="puter">Puter AI(預設,免 API Key)</option>
+          <option value="openai">OpenAI</option>
+          <option value="ollama">Ollama(本機)</option>
+          <option value="custom">本地 / 自訂 LLM(OpenAI 相容)</option>
+        </select>
+      </label>
+
+      <div id="providerNote" class="note"></div>
+
+      <label id="fBase">API 位址 (Base URL)<input type="text" id="baseUrl" autocomplete="off"></label>
+      <label id="fKey">API Key<input type="password" id="apiKey" autocomplete="off" placeholder="sk-..."></label>
+
+      <div class="row">
+        <label>模型<input type="text" id="model" list="modelList" autocomplete="off"></label>
+        <button type="button" class="secondary" id="fetchModels">取得清單</button>
+      </div>
+      <datalist id="modelList"></datalist>
+      <div id="testMsg"></div>
+
+      <label>System Prompt(系統提示,可留空)
+        <textarea id="system" rows="3" placeholder="例如:你是一位親切、精準的助理,預設使用繁體中文回答。"></textarea>
+      </label>
+      <label>Temperature(留空 = 使用模型預設)
+        <input type="number" id="temp" min="0" max="2" step="0.1" placeholder="預設">
+      </label>
+      <div class="note">所有設定與對話只存在這個瀏覽器的 localStorage,不會上傳到任何伺服器(送給你選的 LLM 供應商的內容除外)。</div>
+    </div>
+    <div class="m-foot">
+      <button type="button" class="secondary" id="clearAll" style="margin-right:auto;color:var(--danger)">清除全部對話</button>
+      <button type="button" class="secondary" id="cancelSettings">取消</button>
+      <button type="submit" class="primary" value="save">儲存</button>
+    </div>
+  </form>
+</dialog>
+
+<script>
+/* ============ Provider 定義 ============ */
+const PROVIDERS = {
+  puter:  { name:'Puter AI', defaults:{ model:'gpt-5-nano' },
+            models:['gpt-5-nano','gpt-5-mini','gpt-5','gpt-4.1-mini','claude-sonnet-4-5','claude-opus-4-5','gemini-2.5-flash','deepseek-chat'],
+            note:'使用 <b>puter.js</b>,採「使用者付費」模式:第一次送出訊息時會跳出 Puter 登入視窗,不需要自己的 API Key。模型名稱可自行輸入。' },
+  openai: { name:'OpenAI', defaults:{ baseUrl:'https://api.openai.com/v1', apiKey:'', model:'gpt-4o-mini' },
+            models:['gpt-4o-mini','gpt-4o','gpt-4.1','gpt-4.1-mini','gpt-5','gpt-5-mini'],
+            note:'需要自己的 OpenAI API Key。Key 只存在你的瀏覽器,請求直接從瀏覽器送往 OpenAI。' },
+  ollama: { name:'Ollama', defaults:{ baseUrl:'http://localhost:11434', model:'llama3.2' }, models:[],
+            note:'請先啟動 Ollama 並下載模型(<code>ollama pull llama3.2</code>)。若網頁無法連線,需允許跨來源:設定環境變數 <code>OLLAMA_ORIGINS=*</code> 後重新啟動 Ollama。' },
+  custom: { name:'本地/自訂', defaults:{ baseUrl:'http://localhost:1234/v1', apiKey:'', model:'' }, models:[],
+            note:'適用任何 OpenAI 相容 API:LM Studio(<code>:1234/v1</code>)、llama.cpp server(<code>:8080/v1</code>)、vLLM、LocalAI、text-generation-webui 等。Key 若不需要可留空。需伺服器允許 CORS。' }
+};
+
+/* ============ 狀態 ============ */
+const $ = s => document.querySelector(s);
+const store = {
+  get(k, d){ try{ const v = localStorage.getItem(k); return v ? JSON.parse(v) : d }catch{ return d } },
+  set(k, v){ try{ localStorage.setItem(k, JSON.stringify(v)) }catch{} }
+};
+let settings = store.get('aichat.settings', { provider:'puter', cfg:{}, system:'', temp:'' });
+let chats = store.get('aichat.chats', []);
+let currentId = store.get('aichat.current', null);
+let controller = null, streaming = false;
+
+const cfgOf = p => ({ ...PROVIDERS[p].defaults, ...(settings.cfg[p] || {}) });
+const curChat = () => chats.find(c => c.id === currentId);
+const saveChats = () => { store.set('aichat.chats', chats); store.set('aichat.current', currentId); };
+const saveSettings = () => store.set('aichat.settings', settings);
+
+/* ============ Markdown(輕量,內建) ============ */
+const esc = s => s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+function inline(t){
+  const codes = [];
+  t = t.replace(/`([^`\n]+)`/g, (_, c) => { codes.push(c); return '\u0001' + (codes.length-1) + '\u0001'; });
+  t = esc(t)
+    .replace(/\*\*([^*\n]+)\*\*/g,'<strong>$1</strong>')
+    .replace(/(^|[^*])\*([^*\n]+)\*/g,'$1<em>$2</em>')
+    .replace(/\[([^\]]+)\]\((https?:\/\/[^)\s]+)\)/g,'<a href="$2" target="_blank" rel="noopener noreferrer">$1</a>');
+  return t.replace(/\u0001(\d+)\u0001/g, (_, i) => '<code>' + esc(codes[i]) + '</code>');
+}
+function md(src){
+  const blocks = [];
+  src = src.replace(/```([\w+-]*)[^\n]*\n?([\s\S]*?)(```|$)/g, (_, lang, code) => {
+    blocks.push({ lang, code: code.replace(/\n$/, '') });
+    return '\n\u0002' + (blocks.length-1) + '\u0002\n';
+  });
+  const lines = src.split('\n'); let out = '', para = [], list = null;
+  const flushP = () => { if(para.length){ out += '<p>' + inline(para.join('\n')).replace(/\n/g,'<br>') + '</p>'; para = []; } };
+  const flushL = () => { if(list){ out += `<${list.t}>` + list.items.map(i => '<li>' + inline(i) + '</li>').join('') + `</${list.t}>`; list = null; } };
+  for(const line of lines){
+    let m;
+    if((m = line.match(/^\u0002(\d+)\u0002$/))){
+      flushP(); flushL();
+      const b = blocks[m[1]];
+      out += `<div class="codeblock"><div class="bar"><span>${esc(b.lang || 'text')}</span><button data-copy>複製</button></div><pre><code>${esc(b.code)}</code></pre></div>`;
+    } else if((m = line.match(/^(#{1,4})\s+(.*)$/))){
+      flushP(); flushL(); out += `<h${m[1].length}>${inline(m[2])}</h${m[1].length}>`;
+    } else if((m = line.match(/^\s*[-*+]\s+(.*)$/))){
+      flushP(); if(!list || list.t !== 'ul'){ flushL(); list = { t:'ul', items:[] }; } list.items.push(m[1]);
+    } else if((m = line.match(/^\s*\d+[.)]\s+(.*)$/))){
+      flushP(); if(!list || list.t !== 'ol'){ flushL(); list = { t:'ol', items:[] }; } list.items.push(m[1]);
+    } else if((m = line.match(/^>\s?(.*)$/))){
+      flushP(); flushL(); out += '<blockquote>' + inline(m[1]) + '</blockquote>';
+    } else if(/^\s*(---|\*\*\*)\s*$/.test(line)){
+      flushP(); flushL(); out += '<hr>';
+    } else if(line.trim() === ''){
+      flushP(); flushL();
+    } else { flushL(); para.push(line); }
+  }
+  flushP(); flushL();
+  return out;
+}
+
+/* ============ 串流實作(皆為 async generator) ============ */
+async function* streamPuter(cfg, messages, signal){
+  if(typeof puter === 'undefined') throw new Error('無法載入 puter.js(請確認網路連線,或改用其他供應商)。');
+  const resp = await puter.ai.chat(messages, { model: cfg.model, stream: true });
+  for await (const part of resp){
+    if(signal.aborted) return;
+    const t = part?.text ?? part?.message?.content?.[0]?.text ?? '';
+    if(t) yield t;
+  }
+}
+async function* sseLines(res, signal){
+  const reader = res.body.getReader(), dec = new TextDecoder(); let buf = '';
+  while(true){
+    const { done, value } = await reader.read();
+    if(done) break;
+    buf += dec.decode(value, { stream:true });
+    const parts = buf.split('\n'); buf = parts.pop();
+    for(const p of parts) yield p;
+  }
+  if(buf) yield buf;
+}
+async function httpError(res){
+  let body = ''; try{ body = await res.text() }catch{}
+  try{ const j = JSON.parse(body); body = j.error?.message || j.error || body; }catch{}
+  return new Error(`HTTP ${res.status}:${String(body).slice(0,400)}`);
+}
+async function* streamOpenAI(cfg, messages, signal){
+  const base = (cfg.baseUrl || '').replace(/\/+$/,'');
+  const headers = { 'Content-Type':'application/json' };
+  if(cfg.apiKey) headers.Authorization = 'Bearer ' + cfg.apiKey;
+  const body = { model: cfg.model, messages, stream: true };
+  if(settings.temp !== '' && !isNaN(+settings.temp)) body.temperature = +settings.temp;
+  const res = await fetch(base + '/chat/completions', { method:'POST', headers, body: JSON.stringify(body), signal });
+  if(!res.ok) throw await httpError(res);
+  for await (const line of sseLines(res, signal)){
+    const l = line.trim();
+    if(!l.startsWith('data:')) continue;
+    const data = l.slice(5).trim();
+    if(data === '[DONE]') return;
+    try{ const t = JSON.parse(data).choices?.[0]?.delta?.content; if(t) yield t; }catch{}
+  }
+}
+async function* streamOllama(cfg, messages, signal){
+  const base = (cfg.baseUrl || '').replace(/\/+$/,'');
+  const body = { model: cfg.model, messages, stream: true };
+  if(settings.temp !== '' && !isNaN(+settings.temp)) body.options = { temperature: +settings.temp };
+  const res = await fetch(base + '/api/chat', { method:'POST', headers:{ 'Content-Type':'application/json' }, body: JSON.stringify(body), signal });
+  if(!res.ok) throw await httpError(res);
+  for await (const line of sseLines(res, signal)){
+    if(!line.trim()) continue;
+    try{ const j = JSON.parse(line); if(j.error) throw new Error(j.error); const t = j.message?.content; if(t) yield t; if(j.done) return; }
+    catch(e){ if(e.message && !(e instanceof SyntaxError)) throw e; }
+  }
+}
+const STREAMERS = { puter: streamPuter, openai: streamOpenAI, ollama: streamOllama, custom: streamOpenAI };
+
+/* ============ 對話邏輯 ============ */
+function apiMessages(chat){
+  const msgs = chat.messages.filter(m => !m.error && m.content).map(m => ({ role:m.role, content:m.content }));
+  return settings.system.trim() ? [{ role:'system', content:settings.system.trim() }, ...msgs] : msgs;
+}
+async function run(chat){
+  const asst = { role:'assistant', content:'' };
+  chat.messages.push(asst);
+  streaming = true; controller = new AbortController(); updateSend(); render(true);
+  const provider = settings.provider, cfg = cfgOf(provider);
+  try{
+    if(!cfg.model) throw new Error('尚未設定模型名稱,請到「設定」填寫。');
+    const gen = STREAMERS[provider](cfg, apiMessages({ messages: chat.messages.slice(0,-1) }), controller.signal);
+    let raf = 0;
+    for await (const tok of gen){
+      if(controller.signal.aborted) break;
+      asst.content += tok;
+      if(!raf) raf = requestAnimationFrame(() => { raf = 0; patchLast(); });
+    }
+  }catch(e){
+    if(e.name !== 'AbortError' && !controller.signal.aborted){
+      asst.error = true;
+      let msg = e?.message || (typeof e === 'string' ? e : JSON.stringify(e));
+      if(/Failed to fetch|NetworkError/i.test(msg)) msg += '\n\n可能原因:服務未啟動、位址錯誤,或伺服器未允許 CORS。';
+      asst.content += (asst.content ? '\n\n' : '') + '⚠ ' + msg;
+    }
+  }
+  if(!asst.content){ chat.messages.pop(); }
+  streaming = false; controller = null;
+  saveChats(); updateSend(); render(); renderList();
+}
+function send(text){
+  text = text.trim(); if(!text || streaming) return;
+  let chat = curChat();
+  if(!chat){ chat = { id: 'c' + Date.now(), title:'新對話', messages:[], updated: Date.now() }; chats.unshift(chat); currentId = chat.id; }
+  if(!chat.messages.length) chat.title = text.replace(/\s+/g,' ').slice(0,40);
+  chat.messages.push({ role:'user', content:text }); chat.updated = Date.now();
+  $('#input').value = ''; autosize();
+  renderList(); run(chat);
+}
+function regenerate(){
+  const chat = curChat(); if(!chat || streaming) return;
+  while(chat.messages.length && chat.messages[chat.messages.length-1].role === 'assistant') chat.messages.pop();
+  if(chat.messages.length) run(chat);
+}
+
+/* ============ 畫面 ============ */
+const SUGGEST = ['用簡單的方式解釋量子糾纏','幫我寫一個 Python 爬蟲範例','把這段文字改寫得更簡潔專業','規劃一趟三天兩夜的台南美食行'];
+function msgHTML(m, i, last){
+  if(m.role === 'user') return `<div class="msg user"><div class="bubble">${esc(m.content)}</div></div>`;
+  const body = m.error ? `<div class="err">${esc(m.content)}</div>` : md(m.content);
+  const typing = (streaming && last) ? ' typing' : '';
+  const acts = (streaming && last) ? '' : `<div class="actions"><button data-act="copy" data-i="${i}">複製</button>${last ? '<button data-act="regen">重新生成</button>' : ''}</div>`;
+  return `<div class="msg assistant"><div class="avatar">✦</div><div class="body"><div class="content${typing}">${body}</div>${acts}</div></div>`;
+}
+function render(forceBottom){
+  const chat = curChat(), box = $('#messages');
+  if(!chat || !chat.messages.length){
+    box.innerHTML = `<div class="welcome"><h1 class="serif"><i>✦</i> 你好,今天想聊什麼?</h1><p>目前使用 <b>${esc(PROVIDERS[settings.provider].name)}</b> · ${esc(cfgOf(settings.provider).model || '未設定模型')}</p><div class="chips">${SUGGEST.map(s => `<button data-suggest="${esc(s)}">${esc(s)}</button>`).join('')}</div></div>`;
+  } else {
+    const n = chat.messages.length;
+    box.innerHTML = chat.messages.map((m,i) => msgHTML(m, i, i === n-1)).join('');
+  }
+  renderChip();
+  const sc = $('#scroll'); if(forceBottom !== false) sc.scrollTop = sc.scrollHeight;
+}
+function patchLast(){
+  const chat = curChat(); if(!chat) return;
+  const el = document.querySelector('#messages .msg.assistant:last-child .content'); if(!el) return render();
+  const sc = $('#scroll'), stick = sc.scrollHeight - sc.scrollTop - sc.clientHeight < 80;
+  el.innerHTML = md(chat.messages[chat.messages.length-1].content);
+  if(stick) sc.scrollTop = sc.scrollHeight;
+}
+function renderList(){
+  const sorted = [...chats].sort((a,b) => b.updated - a.updated);
+  $('#chatlist').innerHTML = sorted.map(c => `<div class="chat-item ${c.id === currentId ? 'active' : ''}" data-id="${c.id}"><span>${esc(c.title)}</span><button data-del="${c.id}" title="刪除">✕</button></div>`).join('') || '<div style="padding:12px;color:var(--muted);font-size:13px">還沒有對話</div>';
+}
+function renderChip(){
+  $('#chipProvider').textContent = PROVIDERS[settings.provider].name;
+  $('#chipModel').textContent = cfgOf(settings.provider).model || '';
+}
+function updateSend(){
+  const b = $('#send');
+  b.textContent = streaming ? '■' : '↑';
+  b.disabled = !streaming && !$('#input').value.trim();
+  b.setAttribute('aria-label', streaming ? '停止' : '送出');
+}
+function autosize(){ const t = $('#input'); t.style.height = 'auto'; t.style.height = Math.min(t.scrollHeight, 220) + 'px'; updateSend(); }
+
+/* ============ 事件 ============ */
+$('#input').addEventListener('input', autosize);
+$('#input').addEventListener('keydown', e => {
+  if(e.key === 'Enter' && !e.shiftKey && !e.isComposing){ e.preventDefault(); send($('#input').value); }
+});
+$('#send').addEventListener('click', () => { streaming ? controller?.abort() : send($('#input').value); });
+$('#newChat').addEventListener('click', () => { if(streaming) return; currentId = null; saveChats(); render(); renderList(); $('#sidebar').classList.remove('open'); $('#input').focus(); });
+$('#toggleSide').addEventListener('click', () => $('#sidebar').classList.toggle('open'));
+$('#chatlist').addEventListener('click', e => {
+  if(streaming) return;
+  const del = e.target.closest('[data-del]');
+  if(del){ chats = chats.filter(c => c.id !== del.dataset.del); if(currentId === del.dataset.del) currentId = null; saveChats(); renderList(); render(); return; }
+  const it = e.target.closest('[data-id]');
+  if(it){ currentId = it.dataset.id; saveChats(); renderList(); render(); $('#sidebar').classList.remove('open'); }
+});
+$('#messages').addEventListener('click', e => {
+  const s = e.target.closest('[data-suggest]'); if(s) return send(s.dataset.suggest);
+  const c = e.target.closest('[data-copy]');
+  if(c){ navigator.clipboard.writeText(c.closest('.codeblock').querySelector('code').textContent); c.textContent = '已複製'; setTimeout(() => c.textContent = '複製', 1200); return; }
+  const a = e.target.closest('[data-act]'); if(!a) return;
+  if(a.dataset.act === 'regen') regenerate();
+  if(a.dataset.act === 'copy'){ navigator.clipboard.writeText(curChat().messages[+a.dataset.i].content); a.textContent = '已複製'; setTimeout(() => a.textContent = '複製', 1200); }
+});
+
+/* 主題 */
+function applyTheme(t){ if(t) document.documentElement.dataset.theme = t; else delete document.documentElement.dataset.theme; }
+let theme = store.get('aichat.theme', matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+applyTheme(theme);
+$('#themeBtn').addEventListener('click', () => { theme = theme === 'dark' ? 'light' : 'dark'; store.set('aichat.theme', theme); applyTheme(theme); });
+
+/* ============ 設定視窗 ============ */
+const dlg = $('#settings');
+function fillSettings(){
+  const p = $('#provider').value, cfg = cfgOf(p), def = PROVIDERS[p];
+  $('#providerNote').innerHTML = def.note;
+  $('#fBase').style.display = 'baseUrl' in def.defaults ? '' : 'none';
+  $('#fKey').style.display = 'apiKey' in def.defaults ? '' : 'none';
+  $('#baseUrl').value = cfg.baseUrl || ''; $('#apiKey').value = cfg.apiKey || ''; $('#model').value = cfg.model || '';
+  $('#modelList').innerHTML = def.models.map(m => `<option value="${m}">`).join('');
+  $('#testMsg').textContent = '';
+  $('#fetchModels').style.display = p === 'puter' || p === 'openai' || p === 'ollama' || p === 'custom' ? '' : 'none';
+}
+function openSettings(){
+  $('#provider').value = settings.provider; fillSettings();
+  $('#system').value = settings.system; $('#temp').value = settings.temp;
+  dlg.showModal();
+}
+$('#openSettings').addEventListener('click', openSettings);
+$('#modelChip').addEventListener('click', openSettings);
+$('#provider').addEventListener('change', fillSettings);
+$('#cancelSettings').addEventListener('click', () => dlg.close());
+$('#settingsForm').addEventListener('submit', () => {
+  const p = $('#provider').value, def = PROVIDERS[p].defaults, cfg = { model: $('#model').value.trim() };
+  if('baseUrl' in def) cfg.baseUrl = $('#baseUrl').value.trim();
+  if('apiKey' in def) cfg.apiKey = $('#apiKey').value.trim();
+  settings.provider = p; settings.cfg[p] = cfg;
+  settings.system = $('#system').value; settings.temp = $('#temp').value;
+  saveSettings(); renderChip(); if(!curChat()?.messages.length) render();
+});
+$('#clearAll').addEventListener('click', () => {
+  if(confirm('確定要刪除所有對話嗎?此動作無法復原。')){ chats = []; currentId = null; saveChats(); renderList(); render(); dlg.close(); }
+});
+$('#fetchModels').addEventListener('click', async () => {
+  const p = $('#provider').value, msg = $('#testMsg');
+  const base = $('#baseUrl').value.trim().replace(/\/+$/,''), key = $('#apiKey').value.trim();
+  msg.className = ''; msg.textContent = '讀取中…';
+  try{
+    let names = [];
+    if(p === 'puter'){
+      if(typeof puter === 'undefined' || !puter.ai?.listModels) throw new Error('目前的 puter.js 不支援列出模型,請手動輸入。');
+      const l = await puter.ai.listModels(); names = l.map(x => x.id || x);
+    } else if(p === 'ollama'){
+      const r = await fetch(base + '/api/tags'); if(!r.ok) throw await httpError(r);
+      names = (await r.json()).models.map(m => m.name);
+    } else {
+      const r = await fetch(base + '/models', { headers: key ? { Authorization:'Bearer ' + key } : {} }); if(!r.ok) throw await httpError(r);
+      names = (await r.json()).data.map(m => m.id);
+    }
+    if(!names.length) throw new Error('沒有找到任何模型。');
+    $('#modelList').innerHTML = names.map(n => `<option value="${esc(n)}">`).join('');
+    if(!$('#model').value || !names.includes($('#model').value)) $('#model').value = names[0];
+    msg.className = 'ok'; msg.textContent = `✓ 取得 ${names.length} 個模型(可點模型欄位選擇)`;
+  }catch(e){
+    msg.className = 'bad'; msg.textContent = '✕ ' + (e.message || e) + (/Failed to fetch/i.test(e.message) ? '(服務未啟動或未允許 CORS)' : '');
+  }
+});
+
+/* ============ 初始化 ============ */
+if(currentId && !curChat()) currentId = null;
+renderList(); render(); updateSend();
+</script>
+</body>
+</html>
